@@ -134,7 +134,7 @@ step_sign() {
     gpgconf --kill gpg-agent 2>/dev/null || true
   fi
 
-  fpr=$(gpg --list-secret-keys --with-colons "<$email>" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')
+  fpr=$(gpg --list-secret-keys --with-colons "<$email>" 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}' || true)
   if [[ -z $fpr ]]; then
     [[ -t 0 ]] || { echo "  No terminal to choose a key passphrase; skipping. Run './setup.sh sign' later."; return; }
     echo "  Creating a GPG signing key for $name <$email>."
