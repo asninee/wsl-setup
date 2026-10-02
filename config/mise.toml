@@ -1,0 +1,5 @@
+# Global language versions (symlinked to ~/.config/mise/config.toml).
+# Per-project overrides: add a mise.toml in the project and run `mise use node@22`.
+[tools]
+node = "lts"
+python = "latest"
