@@ -46,7 +46,7 @@ function Install-WslSetup {
 
   # 1. WSL itself
   Write-Step 'Checking WSL'
-  & wsl.exe --version *> $null
+  $versionText = (& wsl.exe --version 2>$null) | Out-String
   if ($LASTEXITCODE -ne 0) {
     Write-Step 'Installing WSL (approve the admin prompt if one appears)'
     & wsl.exe --install --no-distribution
@@ -55,8 +55,12 @@ function Install-WslSetup {
     Write-Host "`nWSL installed. Restart your PC - setup will continue automatically after you sign in." -ForegroundColor Yellow
     return
   }
-  & wsl.exe --update
-  if ($LASTEXITCODE -ne 0) { Write-Warning 'wsl --update failed; continuing with the installed version.' }
+  # --install --name needs WSL 2.4.4+
+  if ($versionText -match '(\d+\.\d+\.\d+)' -and [version]$Matches[1] -lt [version]'2.4.4') {
+    Write-Step 'Updating WSL'
+    & wsl.exe --update
+    if ($LASTEXITCODE -ne 0) { throw 'wsl --update failed. Update WSL from the Microsoft Store and try again.' }
+  }
 
   # 2. Distro
   $created = $false
