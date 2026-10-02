@@ -24,6 +24,13 @@ Options (custom distro name / username):
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/asninee/wsl-setup/main/install.ps1))) -Name dev -UserName me
 ```
 
+Use `-UseImport` to skip `wsl --install` and import the official Debian image directly.
+
+### Requirements / work devices
+
+- **WSL 2 only.** It needs virtualization enabled (BIOS/UEFI) and the *Virtual Machine Platform* Windows feature. On a managed device, ask IT if setup says WSL 2 is unavailable.
+- Never runs `wsl --update` and doesn't need the Microsoft Store. On WSL older than 2.4.4, or if `wsl --install` is blocked, it downloads the official Debian image (checksum-verified) and uses `wsl --import`.
+
 Re-running is safe: an existing distro/user is reused and setup only installs what's missing.
 
 ## What you get

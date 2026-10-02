@@ -17,7 +17,8 @@ function Install-WslSetup {
     [string]$Name = 'Debian',
     [string]$UserName,
     [string]$Repo = 'https://github.com/asninee/wsl-setup.git',
-    [string]$Branch = 'main'
+    [string]$Branch = 'main',
+    [switch]$UseImport
   )
 
   $ErrorActionPreference = 'Continue'
@@ -44,37 +45,78 @@ function Install-WslSetup {
     if ($v -match "[\s'`"]") { throw "Invalid value '$v' (no spaces or quotes allowed)." }
   }
 
-  # 1. WSL itself
-  Write-Step 'Checking WSL'
-  $versionText = (& wsl.exe --version 2>$null) | Out-String
-  if ($LASTEXITCODE -ne 0) {
-    Write-Step 'Installing WSL (approve the admin prompt if one appears)'
-    & wsl.exe --install --no-distribution
-    if ($LASTEXITCODE -ne 0) { throw 'WSL install failed. Make sure virtualization is enabled in your BIOS/UEFI.' }
-    Register-ResumeAfterReboot
-    Write-Host "`nWSL installed. Restart your PC - setup will continue automatically after you sign in." -ForegroundColor Yellow
-    return
-  }
-  # --install --name needs WSL 2.4.4+
-  if ($versionText -match '(\d+\.\d+\.\d+)' -and [version]$Matches[1] -lt [version]'2.4.4') {
-    Write-Step 'Updating WSL'
-    & wsl.exe --update
-    if ($LASTEXITCODE -ne 0) { throw 'wsl --update failed. Update WSL from the Microsoft Store and try again.' }
+  $imageFile = Join-Path $env:TEMP 'wsl-setup-debian.tar.gz'
+
+  # Official Debian WSL image (same source `wsl --install` uses); needs neither the Store nor `wsl --update`.
+  function Get-DebianImage {
+    if (Test-Path $imageFile) { return }
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $ProgressPreference = 'SilentlyContinue'
+    $info = Invoke-RestMethod -UseBasicParsing 'https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json'
+    $debian = $info.ModernDistributions.Debian | Select-Object -First 1
+    $pkg = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { $debian.Arm64Url } else { $debian.Amd64Url }
+    Write-Host "Downloading $($pkg.Url)"
+    Invoke-WebRequest -UseBasicParsing -UserAgent 'wsl-setup' $pkg.Url -OutFile $imageFile
+    if ((Get-FileHash $imageFile -Algorithm SHA256).Hash -ne $pkg.Sha256) {
+      Remove-Item $imageFile -Force
+      throw 'Downloaded Debian image failed checksum verification.'
+    }
   }
 
-  # 2. Distro
+  function Test-Distro { (@(& wsl.exe --list --quiet) | ForEach-Object { $_.Trim() }) -contains $Name }
+
+  # Native installer first (WSL 2.4.4+), then a direct image import that works without `wsl --update`.
+  function New-Distro {
+    if ($modern) {
+      & wsl.exe --install Debian --name $Name --version 2 --no-launch --web-download | Out-Host
+      if ($LASTEXITCODE -eq 0) { return $true }
+      if (Test-Distro) { & wsl.exe --unregister $Name | Out-Null }
+    }
+    try { Get-DebianImage } catch { throw "Downloading Debian failed: $_" }
+    $dir = Join-Path $env:LOCALAPPDATA "WSL\$Name"
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    & wsl.exe --import $Name $dir $imageFile --version 2 | Out-Host
+    if ($LASTEXITCODE -eq 0) { return $true }
+    if (Test-Distro) { & wsl.exe --unregister $Name | Out-Null }
+    return $false
+  }
+
+  # 1. WSL itself (never runs `wsl --update`)
+  Write-Step 'Checking WSL'
+  $versionText = (& wsl.exe --version 2>$null) | Out-String
+  $modern = $LASTEXITCODE -eq 0
+  if (-not $modern) {
+    & wsl.exe --status *> $null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Step 'Installing WSL (approve the admin prompt if one appears)'
+      & wsl.exe --install --no-distribution
+      if ($LASTEXITCODE -ne 0) {
+        throw 'WSL install failed. On a work device, ask IT to enable WSL; otherwise enable virtualization in BIOS/UEFI.'
+      }
+      Register-ResumeAfterReboot
+      Write-Host "`nWSL installed. Restart your PC - setup will continue automatically after you sign in." -ForegroundColor Yellow
+      return
+    }
+  }
+  # `--install --name` needs WSL 2.4.4+; anything older imports the image directly.
+  if ($modern -and $versionText -match '(\d+\.\d+\.\d+)' -and [version]$Matches[1] -lt [version]'2.4.4') { $modern = $false }
+  if ($UseImport) { $modern = $false }
+
+  # 2. Distro (WSL 2 only)
   $created = $false
-  $existing = @(& wsl.exe --list --quiet) | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-  if ($existing -contains $Name) {
+  if (Test-Distro) {
+    $ver = (@(& wsl.exe --list --verbose) | ForEach-Object { , (($_.Trim() -replace '^\*\s*', '') -split '\s+') } |
+      Where-Object { $_[0] -eq $Name } | Select-Object -First 1)[-1]
+    if ($ver -ne '2') { throw "Distro '$Name' uses WSL $ver; only WSL 2 is supported. Pick another name with -Name." }
     Write-Step "Using existing distro '$Name'"
   } else {
-    Write-Step "Creating distro '$Name' (Debian)"
-    & wsl.exe --install Debian --name $Name --no-launch --web-download
-    if ($LASTEXITCODE -ne 0) {
+    Write-Step "Creating distro '$Name' (Debian, WSL 2)"
+    try { $created = New-Distro } finally { Remove-Item $imageFile -Force -ErrorAction SilentlyContinue }
+    if (-not $created) {
       Register-ResumeAfterReboot
-      throw 'Creating the distro failed. If WSL was just installed, restart your PC (setup will resume after sign-in).'
+      throw ('Creating the WSL 2 distro failed. If WSL was just installed, restart your PC (setup resumes after sign-in). ' +
+        'Otherwise WSL 2 needs virtualization: enable it in BIOS/UEFI, or on a work device ask IT to enable "Virtual Machine Platform".')
     }
-    $created = $true
   }
 
   # 3. Linux user
