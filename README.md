@@ -1,6 +1,6 @@
 # wsl-setup
 
-One command to get a ready-to-code Linux environment on Windows (WSL + Debian + Homebrew + mise).
+One command to get a ready-to-code Linux environment on Windows (WSL + Debian or Ubuntu + Homebrew + mise).
 
 ## Install (Windows)
 
@@ -11,8 +11,8 @@ One command to get a ready-to-code Linux environment on Windows (WSL + Debian + 
    irm https://raw.githubusercontent.com/asninee/wsl-setup/main/install.ps1 | iex
    ```
 
-3. Choose a Linux username and password when asked (the password is what `sudo` asks for later).
-4. Wait a few minutes. When it says **All done!**, open **Debian** from the Start menu or Windows Terminal.
+3. Pick **Debian** (default) or **Ubuntu** (latest LTS), then choose a Linux username and password when asked (the password is what `sudo` asks for later).
+4. Wait a few minutes. When it says **All done!**, open your distro (**Debian** or **Ubuntu**) from the Start menu or Windows Terminal.
 
 If WSL wasn't installed yet, it will ask you to **restart your PC**. After you sign back in, setup continues on its own.
 
@@ -21,16 +21,16 @@ If WSL wasn't installed yet, it will ask you to **restart your PC**. After you s
 Options (custom distro name / username):
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/asninee/wsl-setup/main/install.ps1))) -Name dev -UserName me
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/asninee/wsl-setup/main/install.ps1))) -Distro Ubuntu -Name dev -UserName me
 ```
 
-Use `-UseImport` to skip `wsl --install` and import the official Debian image directly.
+Use `-UseImport` to skip `wsl --install` and import the official distro image directly.
 
 ### Requirements / work devices
 
 - **WSL 2 only.** It needs virtualization enabled (BIOS/UEFI) and the *Virtual Machine Platform* Windows feature. On a managed device, ask IT if setup says WSL 2 is unavailable.
 - **No admin rights needed** when WSL is already installed (distros are per-user). Only installing WSL itself needs admin; standard users are told to ask IT instead of getting a UAC prompt.
-- Never runs `wsl --update` and doesn't need the Microsoft Store. On WSL older than 2.4.4, or if `wsl --install` is blocked, it downloads the official Debian image (checksum-verified) and uses `wsl --import`.
+- Never runs `wsl --update` and doesn't need the Microsoft Store. On WSL older than 2.4.4, or if `wsl --install` is blocked, it downloads the official distro image (checksum-verified) and uses `wsl --import`.
 
 Re-running is safe: an existing distro/user is reused and setup only installs what's missing.
 

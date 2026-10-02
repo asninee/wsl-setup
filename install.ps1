@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  One-shot WSL setup from Windows: installs WSL, creates a Debian distro + Linux user, then runs setup.sh inside it.
+  One-shot WSL setup from Windows: installs WSL, creates a Debian or Ubuntu distro + Linux user, then runs setup.sh inside it.
 
 .EXAMPLE
   # Easiest: paste into PowerShell
@@ -8,13 +8,14 @@
 
 .EXAMPLE
   # With options
-  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/asninee/wsl-setup/main/install.ps1))) -Name dev -UserName me
+  & ([scriptblock]::Create((irm https://raw.githubusercontent.com/asninee/wsl-setup/main/install.ps1))) -Distro Ubuntu -Name dev -UserName me
 #>
 
 function Install-WslSetup {
   [CmdletBinding()]
   param(
-    [string]$Name = 'Debian',
+    [ValidateSet('Debian', 'Ubuntu')][string]$Distro,
+    [string]$Name,
     [string]$UserName,
     [string]$Repo = 'https://github.com/asninee/wsl-setup.git',
     [string]$Branch = 'main',
@@ -45,21 +46,21 @@ function Install-WslSetup {
     if ($v -match "[\s'`"]") { throw "Invalid value '$v' (no spaces or quotes allowed)." }
   }
 
-  $imageFile = Join-Path $env:TEMP 'wsl-setup-debian.tar.gz'
-
-  # Official Debian WSL image (same source `wsl --install` uses); needs neither the Store nor `wsl --update`.
-  function Get-DebianImage {
+  # Official distro image (same source `wsl --install` uses); needs neither the Store nor `wsl --update`.
+  function Get-DistroImage {
     if (Test-Path $imageFile) { return }
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $ProgressPreference = 'SilentlyContinue'
     $info = Invoke-RestMethod -UseBasicParsing 'https://raw.githubusercontent.com/microsoft/WSL/master/distributions/DistributionInfo.json'
-    $debian = $info.ModernDistributions.Debian | Select-Object -First 1
-    $pkg = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { $debian.Arm64Url } else { $debian.Amd64Url }
+    $entries = @($info.ModernDistributions.$Distro)
+    $image = @($entries | Where-Object { $_.Default }) + $entries | Select-Object -First 1
+    if (-not $image) { throw "No $Distro image listed by Microsoft." }
+    $pkg = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { $image.Arm64Url } else { $image.Amd64Url }
     Write-Host "Downloading $($pkg.Url)"
     Invoke-WebRequest -UseBasicParsing -UserAgent 'wsl-setup' $pkg.Url -OutFile $imageFile
     if ((Get-FileHash $imageFile -Algorithm SHA256).Hash -ne $pkg.Sha256) {
       Remove-Item $imageFile -Force
-      throw 'Downloaded Debian image failed checksum verification.'
+      throw "Downloaded $Distro image failed checksum verification."
     }
   }
 
@@ -68,11 +69,11 @@ function Install-WslSetup {
   # Native installer first (WSL 2.4.4+), then a direct image import that works without `wsl --update`.
   function New-Distro {
     if ($modern) {
-      & wsl.exe --install Debian --name $Name --version 2 --no-launch --web-download | Out-Host
+      & wsl.exe --install $Distro --name $Name --version 2 --no-launch --web-download | Out-Host
       if ($LASTEXITCODE -eq 0) { return $true }
       if (Test-Distro) { & wsl.exe --unregister $Name | Out-Null }
     }
-    try { Get-DebianImage } catch { throw "Downloading Debian failed: $_" }
+    try { Get-DistroImage } catch { throw "Downloading $Distro failed: $_" }
     $dir = Join-Path $env:LOCALAPPDATA "WSL\$Name"
     New-Item -ItemType Directory -Force $dir | Out-Null
     & wsl.exe --import $Name $dir $imageFile --version 2 | Out-Host
@@ -107,6 +108,17 @@ function Install-WslSetup {
   if ($UseImport) { $modern = $false }
 
   # 2. Distro (WSL 2 only)
+  if (-not $Distro -and -not ($Name -and (Test-Distro))) {
+    Write-Host "`nWhich Linux distribution do you want?"
+    Write-Host '  1) Debian  (default - minimal and stable)'
+    Write-Host '  2) Ubuntu  (latest LTS - most widely used, most tutorials target it)'
+    do { $choice = Read-Host 'Enter 1 or 2 [1]' } until ($choice -in '', '1', '2')
+    $Distro = if ($choice -eq '2') { 'Ubuntu' } else { 'Debian' }
+  }
+  if (-not $Name) { $Name = $Distro }
+  if ($Name -notmatch '^[A-Za-z0-9._-]+$') { throw "Invalid distro name '$Name' (letters, numbers, . _ - only)." }
+  $imageFile = Join-Path $env:TEMP "wsl-setup-$Distro.tar.gz"
+
   $created = $false
   if (Test-Distro) {
     $ver = (@(& wsl.exe --list --verbose) | ForEach-Object { , (($_.Trim() -replace '^\*\s*', '') -split '\s+') } |
@@ -114,7 +126,7 @@ function Install-WslSetup {
     if ($ver -ne '2') { throw "Distro '$Name' uses WSL $ver; only WSL 2 is supported. Pick another name with -Name." }
     Write-Step "Using existing distro '$Name'"
   } else {
-    Write-Step "Creating distro '$Name' (Debian, WSL 2)"
+    Write-Step "Creating distro '$Name' ($Distro, WSL 2)"
     try { $created = New-Distro } finally { Remove-Item $imageFile -Force -ErrorAction SilentlyContinue }
     if (-not $created) {
       Register-ResumeAfterReboot
@@ -181,6 +193,10 @@ fi
   }
 
   & wsl.exe --terminate $Name *> $null
+  # Our setup replaces the distro's first-launch wizard (e.g. Ubuntu's user creation/telemetry prompt); mark it done.
+  Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss' -ErrorAction SilentlyContinue |
+    Where-Object { (Get-ItemProperty $_.PSPath).DistributionName -eq $Name } |
+    ForEach-Object { Set-ItemProperty $_.PSPath -Name RunOOBE -Value 0 -Type DWord }
   if ($created) { & wsl.exe --set-default $Name }
 
   Write-Host "`nAll done! Open '$Name' from the Start menu or Windows Terminal, or run: wsl -d $Name" -ForegroundColor Green
