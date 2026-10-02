@@ -167,7 +167,7 @@ step_sign() {
   if gh api user/gpg_keys --paginate --jq '.[].key_id' | grep -qix "$keyid"; then
     echo "  Key already on GitHub."
   else
-    gpg --armor --export "$fpr" | gh gpg-key add - --title "wsl-setup $(hostname)"
+    gpg --armor --export "$fpr" | gh gpg-key add --title "wsl-setup $(hostname)"
   fi
 }
 
