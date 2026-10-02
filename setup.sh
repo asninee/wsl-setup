@@ -62,10 +62,11 @@ step_mise() {
 
 set_npmrc() {
   local file="$HOME/.npmrc" key="$1" value="$2"
-  touch "$file" && chmod 600 "$file"
-  grep -vF "$key=" "$file" >"$file.tmp" || true
+  touch "$file"
+  (umask 077 && { grep -vF "$key=" "$file" || true; } >"$file.tmp")
   printf '%s=%s\n' "$key" "$value" >>"$file.tmp"
   mv "$file.tmp" "$file"
+  chmod 600 "$file"
 }
 
 step_auth() {
