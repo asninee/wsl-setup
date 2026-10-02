@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Idempotent WSL bootstrap: apt essentials -> Homebrew -> brew bundle -> configs -> mise -> shell.
+# Idempotent WSL bootstrap: apt essentials -> Homebrew -> brew bundle -> configs -> mise -> auth -> shell.
 # Usage: ./setup.sh            # run every step
 #        ./setup.sh brew mise  # run selected steps only
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BREW_PREFIX=/home/linuxbrew/.linuxbrew
-STEPS=(apt wsl brew bundle link mise shell)
+STEPS=(apt wsl brew bundle link mise auth shell)
 
 log() { printf '\n\033[1;34m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
 
@@ -58,6 +58,64 @@ step_link() {
 step_mise() {
   log "mise: install language toolchains"
   mise install --yes
+}
+
+set_npmrc() {
+  local file="$HOME/.npmrc" key="$1" value="$2"
+  touch "$file" && chmod 600 "$file"
+  grep -vF "$key=" "$file" >"$file.tmp" || true
+  printf '%s=%s\n' "$key" "$value" >>"$file.tmp"
+  mv "$file.tmp" "$file"
+}
+
+step_auth() {
+  log "auth: GitHub CLI, git identity, npm (GitHub Packages)"
+  local host=github.com
+  export BROWSER="${BROWSER:-$ROOT/bin/wsl-open}"
+  # GH_TOKEN (optional, for unattended runs) is stored via `gh auth login`, then dropped so gh uses the stored login.
+  local token=${GH_TOKEN:-}
+  unset GH_TOKEN
+
+  if ! gh auth status --hostname "$host" >/dev/null 2>&1; then
+    if [[ -n $token ]]; then
+      printf '%s\n' "$token" | gh auth login --hostname "$host" --git-protocol https --with-token
+    elif [[ -t 0 ]]; then
+      echo "  A browser will open: sign in to GitHub and enter the code shown below."
+      gh auth login --hostname "$host" --git-protocol https --web --scopes read:packages
+    else
+      echo "  No terminal to log in from; skipping. Run './setup.sh auth' later."
+      return
+    fi
+  fi
+
+  if ! gh auth status --hostname "$host" 2>&1 | grep -q "read:packages"; then
+    if [[ -t 0 ]]; then
+      echo "  Adding the read:packages permission (needed for npm installs from GitHub Packages)."
+      gh auth refresh --hostname "$host" --scopes read:packages
+    else
+      echo "  Warning: token lacks read:packages; run 'gh auth refresh -s read:packages' later."
+    fi
+  fi
+
+  gh auth setup-git --hostname "$host"
+
+  if [[ -z $(git config --global user.email || true) ]]; then
+    local id login name
+    IFS=$'\t' read -r id login name < <(gh api user --jq '[.id, .login, (.name // .login)] | @tsv')
+    git config --global user.name "$name"
+    git config --global user.email "$id+$login@users.noreply.github.com"
+    echo "  git identity: $name <$id+$login@users.noreply.github.com>"
+  fi
+  git config --global init.defaultBranch main
+
+  set_npmrc "//npm.pkg.github.com/:_authToken" "$(gh auth token --hostname "$host")"
+  local scope
+  while read -r scope; do
+    [[ -z $scope || $scope == \#* ]] && continue
+    scope=${scope,,}
+    set_npmrc "$scope:registry" "https://npm.pkg.github.com"
+    echo "  npm: $scope -> GitHub Packages"
+  done <"$ROOT/config/npm-scopes"
 }
 
 step_shell() {

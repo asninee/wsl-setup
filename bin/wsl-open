@@ -1,0 +1,4 @@
+#!/bin/sh
+# Opens a URL/file in the default Windows app (used as $BROWSER inside WSL).
+explorer.exe "$1" >/dev/null 2>&1
+exit 0

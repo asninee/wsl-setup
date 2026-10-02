@@ -12,7 +12,8 @@ One command to get a ready-to-code Linux environment on Windows (WSL + Debian or
    ```
 
 3. Pick **Debian** (default) or **Ubuntu** (latest LTS), then choose a Linux username and password when asked (the password is what `sudo` asks for later).
-4. Wait a few minutes. When it says **All done!**, open your distro (**Debian** or **Ubuntu**) from the Start menu or Windows Terminal.
+4. When asked, sign in to GitHub in the browser window that opens and enter the code shown in the terminal.
+5. Wait a few minutes. When it says **All done!**, open your distro (**Debian** or **Ubuntu**) from the Start menu or Windows Terminal.
 
 If WSL wasn't installed yet, it will ask you to **restart your PC**. After you sign back in, setup continues on its own.
 
@@ -42,6 +43,7 @@ Re-running is safe: an existing distro/user is reused and setup only installs wh
 | User-local CLI tools | Homebrew | `Brewfile` |
 | Language versions | mise | `config/mise.toml` |
 | Shell (fish default) | bash / fish | `shell/env.{bash,fish}` |
+| GitHub + npm auth | gh | `config/npm-scopes` |
 
 ## Day to day (inside WSL)
 
@@ -53,8 +55,9 @@ cd ~/dev/wsl-setup
 ./setup.sh bundle mise     # only selected steps
 ```
 
-Steps: `apt wsl brew bundle link mise shell`
+Steps: `apt wsl brew bundle link mise auth shell`
 
 - Add a CLI tool: add it to `Brewfile`, run `./setup.sh bundle`.
 - Add/change a language: `mise use -g go@latest` (writes to `config/mise.toml` via symlink), commit.
+- GitHub / npm login: `./setup.sh auth` (re-run any time). It logs in `gh` (with `read:packages`), makes gh the git credential helper, sets your git name/email from GitHub (noreply address) if unset, and writes the GitHub Packages token to `~/.npmrc`. Scopes in `config/npm-scopes` (e.g. `@tswdts`) are routed to GitHub Packages.
 - Per-project versions: `mise use node@22` inside the project.

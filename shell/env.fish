@@ -2,6 +2,8 @@ if test -x /home/linuxbrew/.linuxbrew/bin/brew
     /home/linuxbrew/.linuxbrew/bin/brew shellenv fish | source
 end
 
+set -q BROWSER; or set -gx BROWSER (path resolve (status filename) | path dirname)/../bin/wsl-open
+
 # Brew's mise ships vendor_conf.d auto-activation; disable it so activation happens once, here.
 set -gx MISE_FISH_AUTO_ACTIVATE 0
 if type -q mise
