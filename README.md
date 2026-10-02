@@ -29,6 +29,7 @@ Use `-UseImport` to skip `wsl --install` and import the official Debian image di
 ### Requirements / work devices
 
 - **WSL 2 only.** It needs virtualization enabled (BIOS/UEFI) and the *Virtual Machine Platform* Windows feature. On a managed device, ask IT if setup says WSL 2 is unavailable.
+- **No admin rights needed** when WSL is already installed (distros are per-user). Only installing WSL itself needs admin; standard users are told to ask IT instead of getting a UAC prompt.
 - Never runs `wsl --update` and doesn't need the Microsoft Store. On WSL older than 2.4.4, or if `wsl --install` is blocked, it downloads the official Debian image (checksum-verified) and uses `wsl --import`.
 
 Re-running is safe: an existing distro/user is reused and setup only installs what's missing.

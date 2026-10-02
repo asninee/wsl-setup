@@ -88,7 +88,11 @@ function Install-WslSetup {
   if (-not $modern) {
     & wsl.exe --status *> $null
     if ($LASTEXITCODE -ne 0) {
-      Write-Step 'Installing WSL (approve the admin prompt if one appears)'
+      # S-1-5-32-544 = Administrators; present (even if filtered by UAC) only for accounts that can elevate.
+      if (-not ((& whoami.exe /groups) -match 'S-1-5-32-544')) {
+        throw 'WSL is not installed and installing it needs admin rights. Ask IT to enable WSL 2, then run this again.'
+      }
+      Write-Step 'Installing WSL (approve the admin prompt)'
       & wsl.exe --install --no-distribution
       if ($LASTEXITCODE -ne 0) {
         throw 'WSL install failed. On a work device, ask IT to enable WSL; otherwise enable virtualization in BIOS/UEFI.'
