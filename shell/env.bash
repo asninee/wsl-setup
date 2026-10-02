@@ -3,6 +3,9 @@ if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
   eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv bash)"
 fi
 
+# Lets gpg ask for the signing-key passphrase in this terminal.
+case $- in *i*) export GPG_TTY="$(tty)" ;; esac
+
 [ -n "${BROWSER:-}" ] || export BROWSER="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../bin/wsl-open"
 
 if command -v mise >/dev/null 2>&1; then

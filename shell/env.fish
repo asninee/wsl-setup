@@ -2,6 +2,9 @@ if test -x /home/linuxbrew/.linuxbrew/bin/brew
     /home/linuxbrew/.linuxbrew/bin/brew shellenv fish | source
 end
 
+# Lets gpg ask for the signing-key passphrase in this terminal.
+status is-interactive; and set -gx GPG_TTY (tty)
+
 set -q BROWSER; or set -gx BROWSER (path resolve (status filename) | path dirname)/../bin/wsl-open
 
 # Brew's mise ships vendor_conf.d auto-activation; disable it so activation happens once, here.

@@ -55,9 +55,10 @@ cd ~/dev/wsl-setup
 ./setup.sh bundle mise     # only selected steps
 ```
 
-Steps: `apt wsl brew bundle link mise auth shell`
+Steps: `apt wsl brew bundle link mise auth sign shell`
 
 - Add a CLI tool: add it to `Brewfile`, run `./setup.sh bundle`.
 - Add/change a language: `mise use -g go@latest` (writes to `config/mise.toml` via symlink), commit.
 - GitHub / npm login: `./setup.sh auth` (re-run any time). It logs in `gh` (with `read:packages`), makes gh the git credential helper, sets your git name/email from GitHub (noreply address) if unset, and writes the GitHub Packages token to `~/.npmrc`. Scopes in `config/npm-scopes` (e.g. `@tswdts`) are routed to GitHub Packages.
+- Commit signing: `./setup.sh sign` creates an ed25519 GPG key for your git email (you choose a passphrase), uploads it to GitHub (asks for the `write:gpg_key` permission) and turns on signing for all commits/tags. The passphrase is asked on first commit and cached for 8 hours. If an editor (e.g. VS Code) can't commit, make one commit in the terminal first to unlock the key.
 - Per-project versions: `mise use node@22` inside the project.
